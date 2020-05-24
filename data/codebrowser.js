@@ -27,6 +27,7 @@ if (!data_path) {
 //Styles:
 var setStyle = "";
 document.write("<link rel='alternate stylesheet' title='Solarized' href='" + data_path + "/solarized.css' />");
+document.write("<link rel='alternate stylesheet' title='Monokai' href='" + data_path + "/monokai.css' />");
 function switchStylestyle(styleName) {
     setStyle = styleName;
     $('link[rel*=style][title]').each(function(i) {

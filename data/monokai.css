@@ -1,0 +1,77 @@
+/**
+ * brief: Modified monokai style
+ * author: Gavin Chou (gavineaglechou@gmail.com)
+ * action: 2020-05-24-Sun created
+ */
+
+/**
+ * To craete a new color style, use chrome debug mode:
+ * 'Select an element in the page to inspect'
+ * to get the style-id in the code display, and then modify it.
+ */
+
+@import "common.css";
+
+body, table.code, select { background-color: #2b2b2b; color: #ffffff; }
+.code { font-family: JetBrains Mono, monospace; font-size: 10pt; }
+/* top header delimiter */
+hr { border: 1px solid #3b3b3b }
+/* top-left input box*/
+input { background-color: #3b3b3b; color: #ffffff; border: #3b3b3b solid; box-shadow:1px 1px 7px gray; }
+
+/* header */
+div#header, div#header + hr { background-color: #2b2b2b; color: #8b8b8b; }
+#header img { display: none } /* don't show top-right woboq log */
+#header span { display: none } /* don't show top-left 'Browse the ...' */
+#header a { color: #8b8b8b; text-decoration:underline; } /* source code ref */
+/* bottom-right */
+#footer { color: #8b8b8b; }
+
+/* line number */
+.code th { background-color: #3b3b3b; color: #8b8b8b; }
+
+/* doxygen normal */
+/*.code i.doc { color: #000080; } */
+/* doxygen command */
+.code i .command { color: #00f }
+/* doxygen refernece/link */
+.code i a { color: #037; }
+/* macro keywords */
+.code u { color: #f92672; text-decoration: none; font-style: normal }
+/* macro instances */
+.code .macro { color: #ae81ff; }
+/* typedef/type/namespace instance */
+.code .type, .code .typedef, .code .namespace, .code .enum  { color: #36F2F3}
+/* .code .field, .code .member, .code .lbl { color: #860d0d } */
+.code .field, .code .member, .code .lbl { font-style: normal; }
+.code .virtual { font-style: italic; color: #52e3f6}
+/* local var */
+/* .code .local { color: #092e64 } */
+.code .global { color: #ff0000; font-style: normal;}
+/* function */
+.code .fn { color: #a6e22e; font-style: normal; }
+/* string */
+.code q::before , .code q::after { content:none; }
+.code .string, .code q { color: #df5f00; }
+/* .char */ .code kbd, .code kdb { color: #df5f00; }
+/* .keyword */ .code b { color: #f92672; font-style: normal; text-decoration: none; }
+/* .comment */ .code i { color: #00e000; }
+/*  .keytype (built-in type)  instances */
+.code em { color: #2F6BFF; font-style: normal; }
+/* .num */ .code var { color: #ae81ff; font-style: normal; }
+/* declaration */
+/* .code dfn { color: #f92672; } */
+
+.highlight { background-color: #555555; !important; }
+th.highlight+td { background-color: #555555; !important; }
+
+/* popup window and cross references */
+#tooltip { background-color: #2b2b2b; }
+#tooltip a { color: #36F2F3;}
+
+/* right box */
+.sideBox { border: 1px; background-color: #3b3b3b !important }
+.sideBox h3 { color: #ffffff; text-align:center; width:100%; cursor: pointer; cursor: hand; margin: 0;}
+/* sidebox cross reference */
+.sideBox a { color: #8b8b8b }
+
