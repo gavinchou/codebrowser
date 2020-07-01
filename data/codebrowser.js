@@ -64,10 +64,12 @@ function readCookie(name) {
 
 var style_match = location.search.match(/.*[?&]style=([^#&]+).*/);
 if (style_match) {
+    // set style with URL args
     var style = style_match[1];
     switchStylestyleAndSetCookie(style);
 } else {
-    var c = readCookie('style') || "qtcreator";
+    // default style
+    var c = readCookie('style') || "monokai";
     if (c) switchStylestyle(c);
 }
 
