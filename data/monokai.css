@@ -12,20 +12,22 @@
 
 @import "common.css";
 
-body, table.code, select { background-color: #2b2b2b; color: #ffffff; }
+body, table.code, select { background-color: #2b2b2b; color: #eeeeee; }
 .code { font-family: JetBrains Mono, monospace; font-size: 10pt; }
 /* top header delimiter */
 hr { border: 1px solid #3b3b3b }
 /* top-left input box*/
-input { background-color: #3b3b3b; color: #ffffff; border: #3b3b3b solid; box-shadow:1px 1px 7px gray; }
+input { background-color: #3b3b3b; color: #eeeeee; border: #3b3b3b solid; box-shadow:1px 1px 7px gray; }
 
 /* header */
 div#header, div#header + hr { background-color: #2b2b2b; color: #8b8b8b; }
 #header img { display: none } /* don't show top-right woboq log */
 #header span { display: none } /* don't show top-left 'Browse the ...' */
-#header a { color: #8b8b8b; text-decoration:underline; } /* source code ref */
+#header a { color: #8b8b8b; text-decoration: underline; } /* source code ref */
 /* bottom-right */
 #footer { color: #8b8b8b; }
+#footer a { color: #8b8b8b; font-style: italic; } /* filename link*/
+#footer em { font-style: normal; } /* date */
 
 /* line number */
 .code th { background-color: #3b3b3b; color: #8b8b8b; }
@@ -35,7 +37,7 @@ div#header, div#header + hr { background-color: #2b2b2b; color: #8b8b8b; }
 /* doxygen command */
 .code i .command { color: #00f }
 /* doxygen refernece/link */
-.code i a { color: #037; }
+.code i a { text-decoration: underline }
 /* macro keywords */
 .code u { color: #f92672; text-decoration: none; font-style: normal }
 /* macro instances */
@@ -71,7 +73,7 @@ th.highlight+td { background-color: #555555; !important; }
 
 /* right box */
 .sideBox { border: 1px; background-color: #3b3b3b !important }
-.sideBox h3 { color: #ffffff; text-align:center; width:100%; cursor: pointer; cursor: hand; margin: 0;}
+.sideBox h3 { color: #eeeeee; text-align:center; width:100%; cursor: pointer; cursor: hand; margin: 0;}
 /* sidebox cross reference */
 .sideBox a { color: #8b8b8b }
 
