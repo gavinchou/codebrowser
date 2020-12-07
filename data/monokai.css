@@ -64,8 +64,9 @@ div#header, div#header + hr { background-color: #2b2b2b; color: #8b8b8b; }
 /* declaration */
 /* .code dfn { color: #f92672; } */
 
-.highlight { background-color: #555555; !important; }
-th.highlight+td { background-color: #555555; !important; }
+/* !important is needed by color, but why?*/
+.highlight { background-color: #FFFC5F; color: black !important;}
+th.highlight+td { background-color: #FFFC5F;}
 
 /* popup window and cross references */
 #tooltip { background-color: #2b2b2b; }
