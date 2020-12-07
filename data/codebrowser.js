@@ -522,10 +522,6 @@ $(function () {
 
         var url = proj_root_path + "/refs/" + replace_invalid_filename_chars(ref);
 
-        if (!$(this).hasClass("highlight")) {
-            highlight_items(ref);
-        }
-
         var computeTooltipContent = function(data, title, id) {
             var type ="", content ="";
             var tt = tooltip.tooltip;
@@ -883,7 +879,14 @@ $(function () {
                 }
             });
         }
-        tooltip.showAfterDelay(elem, function() { computeTooltipContent(tt.tooltip_data, tt.title_, tt.id) })
+        tooltip.showAfterDelay(elem, function() {
+            if (!$(this).hasClass("highlight")) {
+                // disable instant highlight due to mouse move may be quick on
+                // different contents, it is hard to keep the highlight we want
+                highlight_items(ref);
+            }
+            computeTooltipContent(tt.tooltip_data, tt.title_, tt.id)
+        });
 
         return false;
     };
