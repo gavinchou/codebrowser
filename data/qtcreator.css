@@ -23,6 +23,8 @@
 .highlight { background-color: #eee; border-radius:3px; border: 1px solid #B4B4B4; margin:-1px}
 th.highlight { font-weight: bold; }
 th.highlight+td { background-color: #eee; }
+.block-highlight { background-color: #eee; border-radius:3px; border: 1px solid #B4B4B4; margin:-1px}
+th.block-highlight+td { background-color: #eee; }
 
 .sideBox { border: 1px solid #ddd; background-color: #eee; }
 

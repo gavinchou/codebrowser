@@ -68,5 +68,7 @@ $green:     #859900;
 
 .highlight { background-color: #073642 !important; }
 th.highlight+td { background-color: #073642 !important; }
+.block-highlight { background-color: #073642 !important; }
+th.block-highlight+td { background-color: #073642 !important; }
 
 .sideBox { background-color: #073642 !important; border: 1px solid #073642;}

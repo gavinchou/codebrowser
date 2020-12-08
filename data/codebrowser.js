@@ -412,8 +412,10 @@ $(function () {
     // other highlighting stuff
     var highlighted_items;
     var highlight_items = function(ref) {
-        if (highlighted_items)
+        if (highlighted_items) {
             highlighted_items.removeClass("highlight");
+            highlighted_items.removeClass("block-highlight");
+        }
         if (ref) {
             highlighted_items = $("[data-ref='"+escape_selector(ref)+"']");
             highlighted_items.addClass("highlight")
@@ -421,11 +423,17 @@ $(function () {
     }
 
     var anchor_id  = location.hash.substr(1); //Get the word after the hash from the url
-    if (/^\d+$/.test(anchor_id)) {
+
+    highlight_keep_syntax_color = false;
+    if (/^\d+$/.test(anchor_id)) { // highlight the target line: #123
         highlighted_items = $("#" + anchor_id);
+        if (!highlight_keep_syntax_color) { // dont keep syntax color
+            highlighted_items = highlighted_items.next().children().add(highlighted_items);
+        }
         highlighted_items.addClass("highlight")
         scrollToAnchor(anchor_id, false);
-    } else if (/^\d+-\d+$/.test(anchor_id)) {
+    } else if (/^\d+-\d+$/.test(anchor_id)) { // highlight targe line range: #123-456
+        // ragne/block highlight should keep syntax color for better readabilty
         var m = anchor_id.match(/^(\d+)-(\d+)$/);
         var a = parseInt(m[1]);
         var b = parseInt(m[2]);
@@ -436,9 +444,9 @@ $(function () {
             }
         }
         highlighted_items = $(select);
-        highlighted_items.addClass("highlight")
+        highlighted_items.addClass("block-highlight")
         scrollToAnchor("" + a, false);
-    } else if (anchor_id != "") {
+    } else if (anchor_id != "") { // highlight target object, #_Z3foo
         highlight_items(anchor_id);
         scrollToAnchor(anchor_id, false);
     }

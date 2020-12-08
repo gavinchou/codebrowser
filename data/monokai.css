@@ -24,6 +24,7 @@ div#header, div#header + hr { background-color: #2b2b2b; color: #8b8b8b; }
 #header img { display: none } /* don't show top-right woboq log */
 #header span { display: none } /* don't show top-left 'Browse the ...' */
 #header a { color: #8b8b8b; text-decoration: underline; } /* source code ref */
+
 /* bottom-right */
 #footer { color: #8b8b8b; }
 #footer a { color: #8b8b8b; font-style: italic; } /* filename link*/
@@ -64,9 +65,12 @@ div#header, div#header + hr { background-color: #2b2b2b; color: #8b8b8b; }
 /* declaration */
 /* .code dfn { color: #f92672; } */
 
-/* !important is needed by color, but why?*/
-.highlight { background-color: #FFFC5F; color: black !important;}
-th.highlight+td { background-color: #FFFC5F;}
+/* !important is needed to prioritize this highlight style */
+.highlight { background-color: #FFFC5F !important; color: black !important; }
+th.highlight+td { background-color: #FFFC5F !important; color: black !important; }
+th.highlight+td { font-weight: bold; }
+.block-highlight { background-color: #555 !important; }
+th.block-highlight+td { background-color: #555 !important; }
 
 /* popup window and cross references */
 #tooltip { background-color: #2b2b2b; }
