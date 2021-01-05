@@ -430,7 +430,7 @@ $(function () {
         if (!highlight_keep_syntax_color) { // dont keep syntax color
             highlighted_items = highlighted_items.next().children().add(highlighted_items);
         }
-        highlighted_items.addClass("highlight")
+        highlighted_items.addClass("highlight");
         scrollToAnchor(anchor_id, false);
     } else if (/^\d+-\d+$/.test(anchor_id)) { // highlight targe line range: #123-456
         // ragne/block highlight should keep syntax color for better readabilty
@@ -1255,7 +1255,13 @@ $(function () {
     // isLink tells us if we are here because a link was cliked
     function scrollToAnchor(anchor, isLink) {
         var target = $("#" + escape_selector(anchor));
-        if (target.length) {
+        if (!target.length) {
+            return;
+        }
+        // delay execution to get accurate position to scroll
+        setTimeout(function() {
+            targetTop = target.offset().top
+            // console.log(anchor, targetTop, isLink)
             //Smooth scrolling and let back go to the last location
             var contentTop = $("#content").offset().top;
             if (parseInt(anchor)) {
@@ -1266,13 +1272,14 @@ $(function () {
 
             if (isLink) {
             //   history.replaceState({contentTop: contentTop, bodyTop: $("body").scrollTop() }, undefined)
-                history.pushState({bodyTop: target.offset().top - contentTop},
+                history.pushState({bodyTop: targetTop - contentTop},
                                     document.title + "**" + anchor,
                                     window.location.pathname + "#" + anchor);
             }
-            //     $("#content").animate({scrollTop:target.position().top + contentTop }, 300);
-            $("html,body").animate({scrollTop:target.offset().top - contentTop  }, isLink ? 300 : 1);
-        }
+            //  $("#content").animate({scrollTop:target.position().top + contentTop }, 300);
+            $("html,body").animate({scrollTop:targetTop - contentTop}, isLink ? 300 : 1);
+            // console.log(tagetTop - contentTop, target.height() * 7)
+        }, 300/*ms*/);
     }
 
     window.onpopstate = function (e) {
