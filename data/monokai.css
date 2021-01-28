@@ -2,12 +2,15 @@
  * brief: Modified monokai style
  * author: Gavin Chou (gavineaglechou@gmail.com)
  * action: 2020-05-24-Sun created
- */
-
-/**
- * To craete a new color style, use chrome debug mode:
+ *
+ * Theme/Style Monogai is created by Gavin Chou (gavineaglechou@gmail.com),
+ * which is inspired by and derived from Monokai.
+ *
+ * In code browser, to craete a new color style, use chrome debug mode:
  * 'Select an element in the page to inspect'
  * to get the style-id in the code display, and then modify it.
+ *
+ * The code div is a table!
  */
 
 @import "common.css";

@@ -27,7 +27,7 @@ if (!data_path) {
 //Styles:
 var setStyle = "";
 document.write("<link rel='alternate stylesheet' title='Solarized' href='" + data_path + "/solarized.css' />");
-document.write("<link rel='alternate stylesheet' title='Monokai' href='" + data_path + "/monokai.css' />");
+document.write("<link rel='alternate stylesheet' title='Monogai' href='" + data_path + "/monogai.css' />");
 function switchStylestyle(styleName) {
     setStyle = styleName;
     $('link[rel*=style][title]').each(function(i) {
@@ -69,7 +69,7 @@ if (style_match) {
     switchStylestyleAndSetCookie(style);
 } else {
     // default style
-    var c = readCookie('style') || "monokai";
+    var c = readCookie('style') || "monogai";
     if (c) switchStylestyle(c);
 }
 
