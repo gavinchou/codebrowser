@@ -30,10 +30,6 @@
 #include <llvm/Support/Path.h>
 #include <llvm/ADT/StringSwitch.h>
 
-#include <iostream>
-#include <fstream>
-#include <limits>
-#include <stdexcept>
 #include "annotator.h"
 #include "stringbuilder.h"
 #include "browserastvisitor.h"
@@ -41,9 +37,21 @@
 #include "projectmanager.h"
 #include "filesystem.h"
 #include "compat.h"
-#include <ctime>
 
 #include "embedded_includes.h"
+
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+#include <algorithm>
+#include <ctime>
+#include <fstream>
+#include <iostream>
+#include <limits>
+#include <memory>
+#include <mutex>
+#include <stdexcept>
 
 namespace cl = llvm::cl;
 
@@ -86,6 +94,12 @@ cl::opt<std::string> DataPath(
 cl::opt<bool> ProcessAllSources(
     "a",
     cl::desc("Process all files from the compile_commands.json. If this argument is passed, the list of sources does not need to be passed"));
+
+cl::opt<int> NumJobs(
+    "j",
+    cl::value_desc("number of jobs"),
+    cl::desc("Number of jobs for generating"),
+    cl::init(8));
 
 cl::extrahelp extra(
 
@@ -201,7 +215,10 @@ public:
 };
 
 class BrowserAction : public clang::ASTFrontendAction {
+public:
     static std::set<std::string> processed;
+    static std::mutex mtx;
+private:
     DatabaseType WasInDatabase;
 protected:
 #if CLANG_VERSION_MAJOR == 3 && CLANG_VERSION_MINOR <= 5
@@ -211,11 +228,14 @@ protected:
 #endif
     CreateASTConsumer(clang::CompilerInstance &CI,
                                            llvm::StringRef InFile) override {
+        std::unique_lock<std::mutex> lk(BrowserAction::mtx);
         if (processed.count(InFile.str())) {
+            lk.unlock();
             std::cerr << "Skipping already processed " << InFile.str()<< std::endl;
             return nullptr;
         }
         processed.insert(InFile.str());
+        lk.unlock();
 
         CI.getFrontendOpts().SkipFunctionBodies = true;
 
@@ -230,6 +250,7 @@ public:
 
 
 std::set<std::string> BrowserAction::processed;
+decltype(BrowserAction::mtx) BrowserAction::mtx;
 ProjectManager *BrowserAction::projectManager = nullptr;
 
 static bool proceedCommand(std::vector<std::string> command, llvm::StringRef Directory,
@@ -392,8 +413,10 @@ int main(int argc, const char **argv) {
     bool IsProcessingAllDirectory = false;
     std::vector<std::string> DirContents;
     std::vector<std::string> AllFiles = Compilations->getAllFiles();
+    // TODO(gavin): random shuffle instead of sort
     std::sort(AllFiles.begin(), AllFiles.end());
     llvm::ArrayRef<std::string> Sources = SourcePaths;
+
     if (Sources.empty() && ProcessAllSources) {
         // Because else the order is too random
         Sources = AllFiles;
@@ -431,6 +454,35 @@ int main(int argc, const char **argv) {
         std::cerr << "Passing directory is only implemented with llvm >= 3.5" << std::endl;
         return EXIT_FAILURE;
 #endif
+    }
+
+    // multiprocess
+    int Concurrency = NumJobs;
+    Concurrency = Concurrency > 128 ? 128 : Concurrency;
+    Concurrency = Concurrency < 1 ? 1 : Concurrency;
+    int FileCnt = Sources.size();
+    int Batch = FileCnt / Concurrency;
+    int Remainder = FileCnt % Concurrency;
+    Concurrency = Batch == 0 ? FileCnt : Concurrency; // Concurrency > FileCnt
+    auto SourcesBak = Sources;
+    int Index = 0;
+    int SliceStart = 0;
+    std::vector<pid_t> ChildProcess;
+    std::shared_ptr<void> DeferWaitAllChildProcess(nullptr,
+                       [&ChildProcess](...) { // we must wait otherwise segfault
+                       if (!ChildProcess.empty()) while (wait(nullptr) > 0); });
+    while (Concurrency > 1) {
+        Sources = SourcesBak.slice(SliceStart, Batch + !!Remainder);
+        if (++Index >= Concurrency) break; // all children created
+
+        // TODO(gavin): also create pipes for communication
+        pid_t cpid = fork();
+        if (cpid == 0) break; // child
+
+        // parent
+        SliceStart += Batch + !!Remainder;
+        Remainder = Remainder == 0 ? 0 : Remainder - 1;
+        ChildProcess.push_back(cpid);
     }
 
     if (Sources.empty()) {
@@ -474,7 +526,10 @@ int main(int argc, const char **argv) {
 
         auto compileCommandsForFile = Compilations->getCompileCommands(file);
         if (!compileCommandsForFile.empty() && !isHeader) {
-            std::cerr << '[' << (100 * Progress / Sources.size()) << "%] Processing " << file << "\n";
+            std::cerr << '[' << (100 * Progress / Sources.size())
+                << "%] Job " << getpid() << " Processing " << file << "\n";
+
+            // CompilerInstance is single-threaded
             proceedCommand(compileCommandsForFile.front().CommandLine,
                            compileCommandsForFile.front().Directory, file, &FM,
                            IsProcessingAllDirectory ? DatabaseType::ProcessFullDirectory : DatabaseType::InDatabase);
@@ -485,7 +540,6 @@ int main(int argc, const char **argv) {
             NotInDB.push_back(filename.str());
             continue;
         }
-
     }
 
     for (const auto &it : NotInDB) {
@@ -578,3 +632,4 @@ int main(int argc, const char **argv) {
     }
 }
 
+// vim: et tw=80 ts=4 sw=4 cc=80:
