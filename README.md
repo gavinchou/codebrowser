@@ -72,8 +72,29 @@ You may want to `sudo apt install llvm-7 clang-7 libclang-7-dev` on Ubuntu if yo
  
 Example:
 ```bash
-cmake . -DCMAKE_BUILD_TYPE=Release
-make
+# woboq depends on preinstalled llvm
+export LLVM_DIR=${llvm_install_path}
+export Clang_DIR=${clang_install_path}
+# include search path of llvm
+export CXXFLAGS=-I${llvm_install_path}/include/
+
+# build codebrowser
+mkdir build && cd build
+# use -D to define clang include path, the default may not be found
+cmake ../ -DCMAKE_INSTALL_PREFIX=${install_porefix} -DCLANG_BUILTIN_HEADERS_DIR=${clang_install_path}/lib/clang/${clang_version}/include/ -DCMAKE_BUILD_TYPE=Release
+
+make -j8 install
+```
+
+To be specific the above example can be:
+
+```bash
+export LLVM_DIR=$HOME/installed-from-src/llvm/llvm-8.0.1/
+export Clang_DIR=$HOME/installed-from-src/llvm/clang-8.0.1/
+export CXXFLAGS=-I$HOME/installed-from-src/llvm/llvm-8.0.1/include/
+mkdir build && cd build
+cmake ../ -DCMAKE_INSTALL_PREFIX=$HOME/opt/codebrowser -DCLANG_BUILTIN_HEADERS_DIR=$HOME/installed-from-src/llvm/clang-8.0.1/lib/clang/8.0.1/include/ -DCMAKE_BUILD_TYPE=Release
+make -j8
 ```
 
 Compiling the generator on macOS
@@ -88,12 +109,9 @@ Install the clang libraries via homebrew ( http://brew.sh/ ):
 ```bash
 brew install llvm --with-clang --rtti
 ```
+(You can also install clang and llvm by building them from source.)
 
-Then compile the generator:
-```bash
-cmake . -DCMAKE_PREFIX_PATH=/usr/local/Cellar/llvm/<your_llvm_version> -DCMAKE_BUILD_TYPE=Release
-make
-```
+Then compile the generator, it's pretty much the same as compiling on Linux.
 
 Using the generator
 ===================
