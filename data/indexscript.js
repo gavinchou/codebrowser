@@ -206,8 +206,12 @@ $(function() {
                 var content = $("<table/>");
                 var dict = {};
                 var toOpenNow = [];
+                var lastFile = null;
                 for (var i=0; i < fileIndex.length; ++i) {
                     var f = fileIndex[i];
+                    // filter out duplicated file names,
+                    // assumes all files are in sorted order
+                    if (f == lastFile) continue; else lastFile = f;
                     if (f.indexOf(p) == 0) {
                         var sl = f.indexOf('/',  p.length + 1);
 
