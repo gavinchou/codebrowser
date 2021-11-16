@@ -644,11 +644,13 @@ $(function () {
                     }
                     var shouldCompress = d.length > 15;
                     var dict = { number: 0 };
+                    var dedup = null; // when multi-process enabled there may be some deuplicated entries
                     d.each(function() {
                         var th = $(this);
                         var f = th.attr("f");
                         var l = th.attr("l");
                         var t = th.attr("type");
+                        if (dedup == f) return; else dedup = f; // assume sorted
                         if (t) {
                             var prefixL = prefixLen(f, file)
                             if (prefixL >= typePrefixLen) {
