@@ -675,12 +675,11 @@ $(function () {
                         }
                     });
                     if (shouldCompress) {
-                        if (dict.number > 40) {
-                            content += "<br/>(Too many)";
-                            return false;
-                        }
+                        var limit = 50;
+                        var cnt = 0;
                         for(var f in dict) {
                             if (!Object.prototype.hasOwnProperty.call(dict,f) || f==="number") continue;
+                            if (cnt++ > limit) break;
                             var url_begin = proj_root_path + "/" + f + ".html";
                             content += "<br/><a href='" + url_begin + "#" + dict[f][0] +"' >" + f +  "</a>";
                             var len = dict[f].length;
@@ -693,9 +692,15 @@ $(function () {
                                 }
                             }
                         }
+                        if (dict.number > limit) {
+                          // TODO: create link for that are not showed up
+                          content += "<br/>(Too many to show, " + (dict.number - limit) + " more)";
+                          return false;
+                        }
                     }
                     return true;
                 }
+
                 p("Definitions", "def");
                 p("Declarations", "dec");
                 p(isType ? "Inherit" : "Overrides", "inh");
@@ -1013,7 +1018,7 @@ $(function () {
 /*-------------------------------------------------------------------------------------*/
 
     // Search Line
-    $("#header").prepend("<input id='searchline' type='text' placeholder='Search a file or function'/>");
+    $("#header").prepend("<input id='searchline' type='text' placeholder='Search a file, function or regex'/>");
     var searchline = $("input#searchline");
     var searchTerms;
     searchline.focus(function() {
@@ -1281,7 +1286,7 @@ $(function () {
             //  $("#content").animate({scrollTop:target.position().top + contentTop }, 300);
             $("html,body").animate({scrollTop:targetTop - contentTop}, isLink ? 300 : 1);
             // console.log(tagetTop - contentTop, target.height() * 7)
-        }, 300/*ms*/);
+        }, 300 /* ms, the poorer the network the longer this value */);
     }
 
     window.onpopstate = function (e) {
