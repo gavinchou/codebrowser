@@ -31,7 +31,7 @@ for e in `echo "*.proto *.thrift"`; do
     # vim -e '+:TOhtml' '+:w' '+:qa' "${i}"-
     mv -f "${i}.html" "${o}"
     # change default font
-    sed -ri 's/monospace;/Jetbrains Mono, Consolas, monospace; font-size: small;/g' "${o}"
+    sed -ri 's/monospace;/Jetbrains Mono, Consolas, monospace; font-size: 13px;/g' "${o}"
   done
 done
 cd - > /dev/null
@@ -39,9 +39,9 @@ cd - > /dev/null
 # Generate index.html for extra files, this step is optional
 cd ${output_extra}
 # tree . -T "Extra" --charset utf8 -H . -P "*html" -o index.html
-tree . -T "Extra" --charset utf8 -H . -P "*html" | sed -r 's/.html$//' > index.html
+tree . -T "Extra" --charset utf8 -H . -P "*html" | sed -r 's/\.html</</' > index.html
 # Change font to monospace
-sed -ri 's#font-family\s*:\s*[^;]+;#font-family:monospace;#g' index.html
+sed -ri 's#font-family\s*:\s*[^;]+;#font-family:Jetbrains Mono, Consolas, monospace; font-size: 13px;#g' index.html
 sed -ri 's#.VERSION \{ font-size: small;#.VERSION \{ font-size: 0;#g' index.html
 cd - > /dev/null
 
