@@ -292,6 +292,11 @@ void Generator::generate(llvm::StringRef outputPrefix, std::string dataPath, con
     myfile.write(footer.begin(), footer.size());
 
     myfile << "<br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> "
-              CODEBROWSER_VERSION "\n<br/>Generator usage only permitted with license.</p>\n</div></body></html>\n";
+              CODEBROWSER_VERSION
+              R"( (Modified by <a href="https://github.com/gavinchou/codebrowser">Gavin</a>)
+              <br/>Generator usage only permitted with <a href="https://code.woboq.org/#license">license</a></p>
+              </body></html>
+              )";
+
 }
 
