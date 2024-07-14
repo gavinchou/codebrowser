@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.1)
 project(codebrowser_generator)
 
+cmake_policy(SET CMP0057 NEW)
+
 Find_Package(LLVM REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION} in ${LLVM_INSTALL_PREFIX}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
@@ -8,13 +10,11 @@ Find_Package(Clang REQUIRED CONFIG HINTS "${LLVM_INSTALL_PREFIX}/lib/cmake/clang
 message(STATUS "Found Clang in ${CLANG_INSTALL_PREFIX}")
 
 add_executable(codebrowser_generator main.cpp projectmanager.cpp annotator.cpp generator.cpp preprocessorcallback.cpp
-               filesystem.cpp qtsupport.cpp commenthandler.cpp ${CMAKE_CURRENT_BINARY_DIR}/projectmanager_systemprojects.cpp)
+               filesystem.cpp qtsupport.cpp commenthandler.cpp ${CMAKE_CURRENT_BINARY_DIR}/projectmanager_systemprojects.cpp
+               inlayhintannotator.cpp)
 target_include_directories(codebrowser_generator PRIVATE "${CMAKE_CURRENT_LIST_DIR}")
 
-if (${LLVM_VERSION} VERSION_GREATER_EQUAL "10.0.0")
-    target_link_libraries(codebrowser_generator PRIVATE clang-cpp)
-else()
-
+if (${LLVM_VERSION} VERSION_LESS "10.0.0")
     target_link_libraries(codebrowser_generator PRIVATE
         clangFrontend
         clangParse
@@ -25,6 +25,8 @@ else()
         clangTooling
         clangSerialization
     )
+else()
+    target_link_libraries(codebrowser_generator PRIVATE clang-cpp)
 endif()
 
 if(TARGET LLVM)
@@ -38,8 +40,8 @@ else()
 endif()
 
 install(TARGETS codebrowser_generator RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-target_include_directories(codebrowser_generator PUBLIC ${CLANG_INCLUDE_DIRS})
-set_property(TARGET codebrowser_generator PROPERTY CXX_STANDARD 14)
+target_include_directories(codebrowser_generator SYSTEM PUBLIC ${CLANG_INCLUDE_DIRS})
+set_property(TARGET codebrowser_generator PROPERTY CXX_STANDARD 17)
 
 
 if (NOT APPLE AND NOT MSVC)
@@ -73,6 +75,13 @@ string(REGEX REPLACE "git.*$" "" LLVM_VERSION "${LLVM_VERSION}")
 if(NOT CLANG_BUILTIN_HEADERS_DIR)
     set(CLANG_BUILTIN_HEADERS_DIR "${LLVM_LIBRARY_DIR}/clang/${LLVM_VERSION}/include")
 endif()
+
+# try LLVM_VERSION_MAJOR, starting with llvm 16 the above fails
+if (NOT EXISTS ${CLANG_BUILTIN_HEADERS_DIR})
+    set(CLANG_BUILTIN_HEADERS_DIR "${LLVM_LIBRARY_DIR}/clang/${LLVM_VERSION_MAJOR}/include")
+endif()
+
+
 file(GLOB BUILTINS_HEADERS "${CLANG_BUILTIN_HEADERS_DIR}/*.h")
 if(NOT BUILTINS_HEADERS)
     message(FATAL_ERROR "Could not find any clang builtins headers in ${CLANG_BUILTIN_HEADERS_DIR}")

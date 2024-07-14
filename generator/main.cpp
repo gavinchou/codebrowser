@@ -20,23 +20,30 @@
  ****************************************************************************/
 
 
-#include "llvm/Support/CommandLine.h"
+#include "clang/AST/ASTContext.h"
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/Tooling/JSONCompilationDatabase.h"
 #include "clang/Tooling/Tooling.h"
-#include "clang/AST/ASTContext.h"
+#include "llvm/Support/CommandLine.h"
 
 #include <clang/Frontend/CompilerInstance.h>
-#include <llvm/Support/Path.h>
 #include <llvm/ADT/StringSwitch.h>
+#include <llvm/Support/Path.h>
 
 #include "annotator.h"
-#include "stringbuilder.h"
 #include "browserastvisitor.h"
+#include "compat.h"
+#include "filesystem.h"
 #include "preprocessorcallback.h"
 #include "projectmanager.h"
 #include "filesystem.h"
 #include "compat.h"
+#include "stringbuilder.h"
+#include <ctime>
+#include <fstream>
+#include <iostream>
+#include <limits>
+#include <stdexcept>
 
 #include "embedded_includes.h"
 
@@ -56,44 +63,43 @@
 namespace cl = llvm::cl;
 
 cl::opt<std::string> BuildPath(
-  "b",
-  cl::value_desc("compile_commands.json"),
-  cl::desc("Path to the compilation database (compile_commands.json) If this argument is not passed, the compilation arguments can be passed on the command line after '--'"),
-  cl::Optional);
+    "b", cl::value_desc("build_path"),
+    cl::desc(
+        "Build path containing compilation database (compile_commands.json) If this argument is "
+        "not passed, the compilation arguments can be passed on the command line after '--'"),
+    cl::Optional);
 
-cl::list<std::string> SourcePaths(
-  cl::Positional,
-  cl::desc("<sources>* [-- <compile command>]"),
-  cl::ZeroOrMore);
+cl::list<std::string> SourcePaths(cl::Positional, cl::desc("<sources>* [-- <compile command>]"),
+                                  cl::ZeroOrMore);
 
-cl::opt<std::string> OutputPath(
-    "o",
-    cl::value_desc("output path"),
-    cl::desc("Output directory where the generated files will be put"),
-    cl::Required);
+cl::opt<std::string> OutputPath("o", cl::value_desc("output path"),
+                                cl::desc("Output directory where the generated files will be put"),
+                                cl::Required);
 
 cl::list<std::string> ProjectPaths(
-    "p",
-    cl::value_desc("<project>:<path>[:<revision>]"),
-    cl::desc("Project specification: The name of the project, the absolute path of the source code, and the revision separated by colons. Example: -p projectname:/path/to/source/code:0.3beta"),
+    "p", cl::value_desc("<project>:<path>[:<revision>]"),
+    cl::desc(
+        "Project specification: The name of the project, the absolute path of the source code, and "
+        "the revision separated by colons. Example: -p projectname:/path/to/source/code:0.3beta"),
     cl::ZeroOrMore);
 
 
 cl::list<std::string> ExternalProjectPaths(
-    "e",
-    cl::value_desc("<project>:<path>:<url>"),
-    cl::desc("Reference to an external project. Example: -e clang/include/clang:/opt/llvm/include/clang/:https://code.woboq.org/llvm"),
+    "e", cl::value_desc("<project>:<path>:<url>"),
+    cl::desc("Reference to an external project. Example: -e "
+             "clang/include/clang:/opt/llvm/include/clang/:https://code.woboq.org/llvm"),
     cl::ZeroOrMore);
 
-cl::opt<std::string> DataPath(
-    "d",
-    cl::value_desc("data path"),
-    cl::desc("Data url where all the javascript and css files are found. Can be absolute, or relative to the output directory. Defaults to ../data"),
-    cl::Optional);
+cl::opt<std::string>
+    DataPath("d", cl::value_desc("data path"),
+             cl::desc("Data url where all the javascript and css files are found. Can be absolute, "
+                      "or relative to the output directory. Defaults to ../data"),
+             cl::Optional);
 
-cl::opt<bool> ProcessAllSources(
-    "a",
-    cl::desc("Process all files from the compile_commands.json. If this argument is passed, the list of sources does not need to be passed"));
+cl::opt<bool>
+    ProcessAllSources("a",
+                      cl::desc("Process all files from the compile_commands.json. If this argument "
+                               "is passed, the list of sources does not need to be passed"));
 
 cl::opt<int> NumJobs(
     "j",
@@ -103,7 +109,7 @@ cl::opt<int> NumJobs(
 
 cl::extrahelp extra(
 
-R"(
+    R"(
 
 EXAMPLES:
 
@@ -111,11 +117,12 @@ Simple generation without compile command or project (compile command specified 
   codebrowser_generator -o ~/public_html/code -d https://code.woboq.org/data $PWD -- -std=c++14 -I/opt/llvm/include
 
 With a project
-  codebrowser_generator -b $PWD/compile_commands.js -a -p codebrowser:$PWD -o ~/public_html/code
+  codebrowser_generator -b $PWD/build -a -p codebrowser:$PWD -o ~/public_html/code
 )");
 
 #if 1
-std::string locationToString(clang::SourceLocation loc, clang::SourceManager& sm) {
+std::string locationToString(clang::SourceLocation loc, clang::SourceManager &sm)
+{
     clang::PresumedLoc fixed = sm.getPresumedLoc(loc);
     if (!fixed.isValid())
         return "???";
@@ -129,29 +136,43 @@ enum class DatabaseType {
     ProcessFullDirectory
 };
 
-struct BrowserDiagnosticClient : clang::DiagnosticConsumer {
+struct BrowserDiagnosticClient : clang::DiagnosticConsumer
+{
     Annotator &annotator;
-    BrowserDiagnosticClient(Annotator &fm) : annotator(fm) {}
+    BrowserDiagnosticClient(Annotator &fm)
+        : annotator(fm)
+    {
+    }
 
-    virtual void HandleDiagnostic(clang::DiagnosticsEngine::Level DiagLevel, const clang::Diagnostic& Info) override {
+    static bool isImmintrinDotH(const clang::PresumedLoc &loc)
+    {
+        return llvm::StringRef(loc.getFilename()).contains("immintrin.h");
+    }
+
+    virtual void HandleDiagnostic(clang::DiagnosticsEngine::Level DiagLevel,
+                                  const clang::Diagnostic &Info) override
+    {
         std::string clas;
         llvm::SmallString<1000> diag;
         Info.FormatDiagnostic(diag);
 
-        switch(DiagLevel) {
-            case clang::DiagnosticsEngine::Fatal:
-                std::cerr << "FATAL ";
-                LLVM_FALLTHROUGH;
-            case clang::DiagnosticsEngine::Error:
-                std::cerr << "Error: " << locationToString(Info.getLocation(), annotator.getSourceMgr())
-                            << ": " << diag.c_str() << std::endl;
-                clas = "error";
-                break;
-            case clang::DiagnosticsEngine::Warning:
-                clas = "warning";
-                break;
-            default:
+        switch (DiagLevel) {
+        case clang::DiagnosticsEngine::Fatal:
+            // ignore tons of errors in immintrin.h
+            if (isImmintrinDotH(annotator.getSourceMgr().getPresumedLoc(Info.getLocation())))
                 return;
+            std::cerr << "FATAL ";
+            LLVM_FALLTHROUGH;
+        case clang::DiagnosticsEngine::Error:
+            std::cerr << "Error: " << locationToString(Info.getLocation(), annotator.getSourceMgr())
+                      << ": " << diag.c_str() << std::endl;
+            clas = "error";
+            break;
+        case clang::DiagnosticsEngine::Warning:
+            clas = "warning";
+            break;
+        default:
+            return;
         }
         clang::SourceRange Range = Info.getLocation();
         annotator.reportDiagnostic(Range, diag.c_str(), clas);
@@ -163,18 +184,29 @@ class BrowserASTConsumer : public clang::ASTConsumer
     clang::CompilerInstance &ci;
     Annotator annotator;
     DatabaseType WasInDatabase;
-public:
-    BrowserASTConsumer(clang::CompilerInstance &ci, ProjectManager &projectManager, DatabaseType WasInDatabase)
-        : clang::ASTConsumer(), ci(ci), annotator(projectManager), WasInDatabase(WasInDatabase)
-    {
-        //ci.getLangOpts().DelayedTemplateParsing = (true);
-        ci.getPreprocessor().enableIncrementalProcessing();
-    }
-    virtual ~BrowserASTConsumer() {
-	        ci.getDiagnostics().setClient(new clang::IgnoringDiagConsumer, true);
-	 }
 
-    virtual void Initialize(clang::ASTContext& Ctx) override {
+public:
+    BrowserASTConsumer(clang::CompilerInstance &ci, ProjectManager &projectManager,
+                       DatabaseType WasInDatabase)
+        : clang::ASTConsumer()
+        , ci(ci)
+        , annotator(projectManager)
+        , WasInDatabase(WasInDatabase)
+    {
+        // ci.getLangOpts().DelayedTemplateParsing = (true);
+#if CLANG_VERSION_MAJOR < 16
+        // the meaning of this function has changed which causes
+        // a lot of issues in clang 16
+        ci.getPreprocessor().enableIncrementalProcessing();
+#endif
+    }
+    virtual ~BrowserASTConsumer()
+    {
+        ci.getDiagnostics().setClient(new clang::IgnoringDiagConsumer, true);
+    }
+
+    virtual void Initialize(clang::ASTContext &Ctx) override
+    {
         annotator.setSourceMgr(Ctx.getSourceManager(), Ctx.getLangOpts());
         annotator.setMangleContext(Ctx.createMangleContext());
         ci.getPreprocessor().addPPCallbacks(maybe_unique(new PreprocessorCallback(
@@ -183,7 +215,8 @@ public:
         ci.getDiagnostics().setErrorLimit(0);
     }
 
-    virtual bool HandleTopLevelDecl(clang::DeclGroupRef D) override {
+    virtual bool HandleTopLevelDecl(clang::DeclGroupRef D) override
+    {
         if (ci.getDiagnostics().hasFatalErrorOccurred()) {
             // Reset errors: (Hack to ignore the fatal errors.)
             ci.getDiagnostics().Reset();
@@ -193,10 +226,11 @@ public:
         return true;
     }
 
-    virtual void HandleTranslationUnit(clang::ASTContext& Ctx) override {
+    virtual void HandleTranslationUnit(clang::ASTContext &Ctx) override
+    {
 
-       /* if (PP.getDiagnostics().hasErrorOccurred())
-            return;*/
+        /* if (PP.getDiagnostics().hasErrorOccurred())
+             return;*/
         ci.getPreprocessor().getDiagnostics().getClient();
 
 
@@ -207,10 +241,12 @@ public:
         annotator.generate(ci.getSema(), WasInDatabase != DatabaseType::NotInDatabase);
     }
 
-    virtual bool shouldSkipFunctionBody(clang::Decl *D) override {
+    virtual bool shouldSkipFunctionBody(clang::Decl *D) override
+    {
         return !annotator.shouldProcess(
-            clang::FullSourceLoc(D->getLocation(),annotator.getSourceMgr())
-                .getExpansionLoc().getFileID());
+            clang::FullSourceLoc(D->getLocation(), annotator.getSourceMgr())
+                .getExpansionLoc()
+                .getFileID());
     }
 };
 
@@ -220,6 +256,7 @@ public:
     static std::mutex mtx;
 private:
     DatabaseType WasInDatabase;
+
 protected:
 #if CLANG_VERSION_MAJOR == 3 && CLANG_VERSION_MINOR <= 5
     virtual clang::ASTConsumer *
@@ -243,8 +280,14 @@ protected:
     }
 
 public:
-    BrowserAction(DatabaseType WasInDatabase = DatabaseType::InDatabase) : WasInDatabase(WasInDatabase) {}
-    virtual bool hasCodeCompletionSupport() const override { return true; }
+    BrowserAction(DatabaseType WasInDatabase = DatabaseType::InDatabase)
+        : WasInDatabase(WasInDatabase)
+    {
+    }
+    virtual bool hasCodeCompletionSupport() const override
+    {
+        return true;
+    }
     static ProjectManager *projectManager;
 };
 
@@ -254,13 +297,14 @@ decltype(BrowserAction::mtx) BrowserAction::mtx;
 ProjectManager *BrowserAction::projectManager = nullptr;
 
 static bool proceedCommand(std::vector<std::string> command, llvm::StringRef Directory,
-                           llvm::StringRef file, clang::FileManager *FM, DatabaseType WasInDatabase) {
+                           llvm::StringRef file, clang::FileManager *FM, DatabaseType WasInDatabase)
+{
     // This code change all the paths to be absolute paths
     //  FIXME:  it is a bit fragile.
     bool previousIsDashI = false;
     bool previousNeedsMacro = false;
     bool hasNoStdInc = false;
-    for(std::string &A : command) {
+    for (std::string &A : command) {
         if (previousIsDashI && !A.empty() && A[0] != '/') {
             A = Directory % "/" % A;
             previousIsDashI = false;
@@ -268,27 +312,29 @@ static bool proceedCommand(std::vector<std::string> command, llvm::StringRef Dir
         } else if (A == "-I") {
             previousIsDashI = true;
             continue;
-        } else if (A == "-nostdinc") {
-          hasNoStdInc = true;
-          continue;
+        } else if (A == "-nostdinc" || A == "-nostdinc++") {
+            hasNoStdInc = true;
+            continue;
         } else if (A == "-U" || A == "-D") {
-          previousNeedsMacro = true;
-          continue;
+            previousNeedsMacro = true;
+            continue;
         }
         if (previousNeedsMacro) {
-          previousNeedsMacro = false;
-          continue;
+            previousNeedsMacro = false;
+            continue;
         }
         previousIsDashI = false;
-        if (A.empty()) continue;
+        if (A.empty())
+            continue;
         if (llvm::StringRef(A).startswith("-I") && A[2] != '/') {
             A = "-I" % Directory % "/" % llvm::StringRef(A).substr(2);
             continue;
         }
-        if (A[0] == '-' || A[0] == '/') continue;
+        if (A[0] == '-' || A[0] == '/')
+            continue;
         std::string PossiblePath = Directory % "/" % A;
         if (llvm::sys::fs::exists(PossiblePath))
-        A = PossiblePath;
+            A = PossiblePath;
     }
 
 #if CLANG_VERSION_MAJOR == 3 && CLANG_VERSION_MINOR < 6
@@ -305,41 +351,47 @@ static bool proceedCommand(std::vector<std::string> command, llvm::StringRef Dir
 
     if (!hasNoStdInc) {
 #ifndef _WIN32
-      command.push_back("-isystem");
+        command.push_back("-isystem");
 #else
-      command.push_back("-I");
+        command.push_back("-I");
 #endif
 
-      command.push_back("/builtins");
+        command.push_back("/builtins");
     }
 
     command.push_back("-Qunused-arguments");
     command.push_back("-Wno-unknown-warning-option");
     clang::tooling::ToolInvocation Inv(command, maybe_unique(new BrowserAction(WasInDatabase)), FM);
 
+#if CLANG_VERSION_MAJOR <= 10
     if (!hasNoStdInc) {
-      // Map the builtins includes
-      const EmbeddedFile *f = EmbeddedFiles;
-      while (f->filename) {
-          Inv.mapVirtualFile(f->filename, {f->content , f->size } );
-          f++;
-      }
+        // Map the builtins includes
+        const EmbeddedFile *f = EmbeddedFiles;
+        while (f->filename) {
+            Inv.mapVirtualFile(f->filename, { f->content, f->size });
+            f++;
+        }
     }
+#endif
+
     bool result = Inv.run();
     if (!result) {
-        std::cerr << "Error: The file was not recognized as source code: " << file.str() <<  std::endl;
+        std::cerr << "Error: The file was not recognized as source code: " << file.str()
+                  << std::endl;
     }
     return result;
 }
 
-int main(int argc, const char **argv) {
+int main(int argc, const char **argv)
+{
     std::string ErrorMessage;
     std::unique_ptr<clang::tooling::CompilationDatabase> Compilations(
         clang::tooling::FixedCompilationDatabase::loadFromCommandLine(argc, argv
 #if CLANG_VERSION_MAJOR >= 5
-       , ErrorMessage
+                                                                      ,
+                                                                      ErrorMessage
 #endif
-        ));
+                                                                      ));
     if (!ErrorMessage.empty()) {
         std::cerr << ErrorMessage << std::endl;
         ErrorMessage = {};
@@ -352,32 +404,35 @@ int main(int argc, const char **argv) {
 #endif
 
     ProjectManager projectManager(OutputPath, DataPath);
-    for(std::string &s : ProjectPaths) {
+    for (std::string &s : ProjectPaths) {
         auto colonPos = s.find(':');
         if (colonPos >= s.size()) {
             std::cerr << "fail to parse project option : " << s << std::endl;
             continue;
         }
-        auto secondColonPos = s.find(':', colonPos+1);
-        ProjectInfo info { s.substr(0, colonPos), s.substr(colonPos+1, secondColonPos - colonPos -1),
-            secondColonPos < s.size() ? s.substr(secondColonPos + 1) : std::string() };
+        auto secondColonPos = s.find(':', colonPos + 1);
+        ProjectInfo info { s.substr(0, colonPos),
+                           s.substr(colonPos + 1, secondColonPos - colonPos - 1),
+                           secondColonPos < s.size() ? s.substr(secondColonPos + 1)
+                                                     : std::string() };
         if (!projectManager.addProject(std::move(info))) {
             std::cerr << "invalid project directory for : " << s << std::endl;
         }
     }
-    for(std::string &s : ExternalProjectPaths) {
+    for (std::string &s : ExternalProjectPaths) {
         auto colonPos = s.find(':');
         if (colonPos >= s.size()) {
             std::cerr << "fail to parse project option : " << s << std::endl;
             continue;
         }
-        auto secondColonPos = s.find(':', colonPos+1);
+        auto secondColonPos = s.find(':', colonPos + 1);
         if (secondColonPos >= s.size()) {
             std::cerr << "fail to parse project option : " << s << std::endl;
             continue;
         }
-        ProjectInfo info { s.substr(0, colonPos), s.substr(colonPos+1, secondColonPos - colonPos -1),
-            ProjectInfo::External };
+        ProjectInfo info { s.substr(0, colonPos),
+                           s.substr(colonPos + 1, secondColonPos - colonPos - 1),
+                           ProjectInfo::External };
         info.external_root_url = s.substr(secondColonPos + 1);
         if (!projectManager.addProject(std::move(info))) {
             std::cerr << "invalid project directory for : " << s << std::endl;
@@ -392,9 +447,11 @@ int main(int argc, const char **argv) {
                 clang::tooling::CompilationDatabase::loadFromDirectory(BuildPath, ErrorMessage));
         } else {
             Compilations = std::unique_ptr<clang::tooling::CompilationDatabase>(
-                clang::tooling::JSONCompilationDatabase::loadFromFile(BuildPath, ErrorMessage
+                clang::tooling::JSONCompilationDatabase::loadFromFile(
+                    BuildPath, ErrorMessage
 #if CLANG_VERSION_MAJOR >= 4
-                    , clang::tooling::JSONCommandLineSyntax::AutoDetect
+                    ,
+                    clang::tooling::JSONCommandLineSyntax::AutoDetect
 #endif
                     ));
         }
@@ -404,9 +461,11 @@ int main(int argc, const char **argv) {
     }
 
     if (!Compilations) {
-        std::cerr << "Could not load compilationdatabase. "
-                     "Please use the -b option to a path containing a compile_commands.json, or use "
-                     "'--' followed by the compilation commands." << std::endl;
+        std::cerr
+            << "Could not load compilationdatabase. "
+               "Please use the -b option to a path containing a compile_commands.json, or use "
+               "'--' followed by the compilation commands."
+            << std::endl;
         return EXIT_FAILURE;
     }
 
@@ -425,14 +484,14 @@ int main(int argc, const char **argv) {
         return EXIT_FAILURE;
     } else if (Sources.size() == 1 && llvm::sys::fs::is_directory(Sources.front())) {
 #if CLANG_VERSION_MAJOR != 3 || CLANG_VERSION_MINOR >= 5
-         // A directory was passed, process all the files in that directory
+        // A directory was passed, process all the files in that directory
         llvm::SmallString<128> DirName;
         llvm::sys::path::native(Sources.front(), DirName);
         while (DirName.endswith("/"))
             DirName.pop_back();
         std::error_code EC;
         for (llvm::sys::fs::recursive_directory_iterator it(DirName.str(), EC), DirEnd;
-                it != DirEnd && !EC; it.increment(EC)) {
+             it != DirEnd && !EC; it.increment(EC)) {
             if (llvm::sys::path::filename(it->path()).startswith(".")) {
                 it.no_push();
                 continue;
@@ -447,7 +506,8 @@ int main(int argc, const char **argv) {
         }
 
         if (ProjectPaths.empty()) {
-            ProjectInfo info { llvm::sys::path::filename(DirName), DirName.str() };
+            ProjectInfo info { std::string(llvm::sys::path::filename(DirName)),
+                               std::string(DirName.str()) };
             projectManager.addProject(std::move(info));
         }
 #else
@@ -486,16 +546,40 @@ int main(int argc, const char **argv) {
     }
 
     if (Sources.empty()) {
-        std::cerr << "No source files.  Please pass source files as argument, or use '-a'" << std::endl;
+        std::cerr << "No source files.  Please pass source files as argument, or use '-a'"
+                  << std::endl;
         return EXIT_FAILURE;
     }
     if (ProjectPaths.empty() && !IsProcessingAllDirectory) {
-        std::cerr << "You must specify a project name and directory with '-p name:directory'" << std::endl;
+        std::cerr << "You must specify a project name and directory with '-p name:directory'"
+                  << std::endl;
         return EXIT_FAILURE;
     }
 
-    clang::FileManager FM({"."});
+#if CLANG_VERSION_MAJOR >= 12
+    llvm::IntrusiveRefCntPtr<llvm::vfs::OverlayFileSystem> VFS(
+        new llvm::vfs::OverlayFileSystem(llvm::vfs::getRealFileSystem()));
+    clang::FileManager FM({ "." }, VFS);
+#else
+    clang::FileManager FM({ "." });
+#endif
     FM.Retain();
+
+#if CLANG_VERSION_MAJOR >= 12
+    // Map virtual files
+    {
+        auto InMemoryFS = llvm::IntrusiveRefCntPtr<llvm::vfs::InMemoryFileSystem>(
+            new llvm::vfs::InMemoryFileSystem);
+        VFS->pushOverlay(InMemoryFS);
+        // Map the builtins includes
+        const EmbeddedFile *f = EmbeddedFiles;
+        while (f->filename) {
+            InMemoryFS->addFile(f->filename, 0, llvm::MemoryBuffer::getMemBufferCopy(f->content));
+            f++;
+        }
+    }
+#endif
+
     int Progress = 0;
 
     std::vector<std::string> NotInDB;
@@ -512,17 +596,19 @@ int main(int argc, const char **argv) {
 
         if (auto project = projectManager.projectForFile(filename)) {
             if (!projectManager.shouldProcess(filename, project)) {
-                std::cerr << "Sources: Skipping already processed " << filename.c_str() << std::endl;
+                std::cerr << "Sources: Skipping already processed " << filename.c_str()
+                          << std::endl;
                 continue;
             }
         } else {
-            std::cerr << "Sources: Skipping file not included by any project " << filename.c_str() << std::endl;
+            std::cerr << "Sources: Skipping file not included by any project " << filename.c_str()
+                      << std::endl;
             continue;
         }
 
         bool isHeader = llvm::StringSwitch<bool>(llvm::sys::path::extension(filename))
-            .Cases(".h", ".H", ".hh", ".hpp", true)
-            .Default(false);
+                            .Cases(".h", ".H", ".hh", ".hpp", true)
+                            .Default(false);
 
         auto compileCommandsForFile = Compilations->getCompileCommands(file);
         if (!compileCommandsForFile.empty() && !isHeader) {
@@ -532,12 +618,13 @@ int main(int argc, const char **argv) {
             // CompilerInstance is single-threaded
             proceedCommand(compileCommandsForFile.front().CommandLine,
                            compileCommandsForFile.front().Directory, file, &FM,
-                           IsProcessingAllDirectory ? DatabaseType::ProcessFullDirectory : DatabaseType::InDatabase);
+                           IsProcessingAllDirectory ? DatabaseType::ProcessFullDirectory
+                                                    : DatabaseType::InDatabase);
         } else {
             // TODO: Try to find a command line for a file in the same path
             std::cerr << "Delayed " << file << "\n";
             Progress--;
-            NotInDB.push_back(filename.str());
+            NotInDB.push_back(std::string(filename.str()));
             continue;
         }
     }
@@ -552,7 +639,8 @@ int main(int argc, const char **argv) {
                 continue;
             }
         } else {
-            std::cerr << "NotInDB: Skipping file not included by any project " << file.c_str() << std::endl;
+            std::cerr << "NotInDB: Skipping file not included by any project " << file.c_str()
+                      << std::endl;
             continue;
         }
 
@@ -571,7 +659,8 @@ int main(int argc, const char **argv) {
 
         bool success = false;
         if (!compileCommandsForFile.empty()) {
-            std::cerr << '[' << (100 * Progress / Sources.size()) << "%] Processing " << file << "\n";
+            std::cerr << '[' << (100 * Progress / Sources.size()) << "%] Processing " << file
+                      << "\n";
             auto command = compileCommandsForFile.front().CommandLine;
             std::replace(command.begin(), command.end(), fileForCommands, it);
             if (llvm::StringRef(file).endswith(".qdoc")) {
@@ -582,7 +671,8 @@ int main(int argc, const char **argv) {
             }
             success = proceedCommand(std::move(command), compileCommandsForFile.front().Directory,
                                      file, &FM,
-                                     IsProcessingAllDirectory ? DatabaseType::ProcessFullDirectory : DatabaseType::NotInDatabase);
+                                     IsProcessingAllDirectory ? DatabaseType::ProcessFullDirectory
+                                                              : DatabaseType::NotInDatabase);
         } else {
             std::cerr << "Could not find commands for " << file << "\n";
         }
@@ -599,8 +689,8 @@ int main(int argc, const char **argv) {
             char buf[80];
             std::strftime(buf, sizeof(buf), "%Y-%b-%d", tm);
 
-            std::string footer = "Generated on <em>" % std::string(buf) % "</em>"
-                                % " from project " % projectinfo->name % "</a>";
+            std::string footer = "Generated on <em>" % std::string(buf) % "</em>" % " from project "
+                % projectinfo->name % "</a>";
             if (!projectinfo->revision.empty())
                 footer %= " revision <em>" % projectinfo->revision % "</em>";
 
@@ -615,7 +705,8 @@ int main(int argc, const char **argv) {
             std::unique_ptr<llvm::MemoryBuffer> Buf = std::move(B.get());
 #endif
 
-            std::string fn = projectinfo->name % "/" % llvm::StringRef(file).substr(projectinfo->source_path.size());
+            std::string fn = projectinfo->name % "/"
+                % llvm::StringRef(file).substr(projectinfo->source_path.size());
 
             Generator g;
             g.generate(projectManager.outputPrefix, projectManager.dataPath, fn,
@@ -631,5 +722,4 @@ int main(int argc, const char **argv) {
         }
     }
 }
-
 // vim: et tw=80 ts=4 sw=4 cc=80:

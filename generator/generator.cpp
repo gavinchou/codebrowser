@@ -97,10 +97,15 @@ void Generator::Tag::open(llvm::raw_ostream &myfile) const
 
     if (len) {
         myfile << ">";
+        if (!innerHtml.empty())
+            myfile << innerHtml;
     } else {
         // Unfortunately, html5 won't allow <a /> or <span /> tags, they need to be explicitly closed
         //    myfile << "/>";
-        myfile << "></" << name << ">";
+        if (!innerHtml.empty())
+            myfile << ">" << innerHtml << "</" << name << ">";
+        else
+            myfile << "></" << name << ">";
     }
 }
 
@@ -127,7 +132,11 @@ void Generator::generate(llvm::StringRef outputPrefix, std::string dataPath, con
     }
 #else
     std::error_code error_code;
+#if CLANG_VERSION_MAJOR >= 13
+    llvm::raw_fd_ostream myfile(real_filename, error_code, llvm::sys::fs::OF_None);
+#else
     llvm::raw_fd_ostream myfile(real_filename, error_code, llvm::sys::fs::F_None);
+#endif
     if (error_code) {
         std::cerr << "Error generating " << real_filename << " ";
         std::cerr << error_code.message() << std::endl;
@@ -299,4 +308,3 @@ void Generator::generate(llvm::StringRef outputPrefix, std::string dataPath, con
               )";
 
 }
-
